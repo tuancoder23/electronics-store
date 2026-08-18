@@ -1,0 +1,16 @@
+server:
+  port: 8080
+
+spring:
+  application:
+    name: electronics-store-backend
+  mvc:
+    throw-exception-if-no-handler-found: true
+  web:
+    resources:
+      add-mappings: false
+
+logging:
+  level:
+    com.electronics.store: DEBUG
+    org.springframework.web: INFO
