@@ -4,17 +4,6 @@ server:
 spring:
   application:
     name: electronics-store-backend
-  datasource:
-    url: ${DB_URL:jdbc:mysql://localhost:3306/electronics_store?createDatabaseIfNotExist=true&useSSL=false&serverTimezone=Asia/Ho_Chi_Minh&allowPublicKeyRetrieval=true}
-    username: ${DB_USERNAME:root}
-    password: ${DB_PASSWORD:}
-  jpa:
-    hibernate:
-      ddl-auto: update
-    show-sql: true
-    properties:
-      hibernate:
-        format_sql: true
   mvc:
     throw-exception-if-no-handler-found: true
   web:
