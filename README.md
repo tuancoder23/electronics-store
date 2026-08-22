@@ -10,7 +10,7 @@
 |----------|-----------------------------------------------|
 | Backend  | Java 21, Spring Boot 3.4, Maven               |
 | Frontend | React 19, TypeScript, Vite 6                  |
-| Database | PostgreSQL *(planned)*                        |
+| Database | MySQL                        |
 
 ---
 
@@ -20,17 +20,17 @@
 electronics-store/
 ├── backend/          # Spring Boot REST API
 │   ├── src/
-│   │   ├── main/java/com/electronicsstore/
+│   │   ├── main/java/com/electronics/store/
 │   │   │   ├── config/        # CORS, web config
 │   │   │   ├── controller/    # REST controllers
 │   │   │   ├── dto/           # Request / Response DTOs
 │   │   │   │   ├── request/
 │   │   │   │   └── response/
-│   │   │   ├── entity/        # JPA entities (future)
+│   │   │   ├── entity/        # JPA entities 
 │   │   │   ├── exception/     # Global error handling
-│   │   │   ├── mapper/        # DTO ↔ Entity mappers (future)
-│   │   │   ├── repository/    # Spring Data repos (future)
-│   │   │   └── service/       # Business logic (future)
+│   │   │   ├── mapper/        # DTO ↔ Entity mappers 
+│   │   │   ├── repository/    # Spring Data repos 
+│   │   │   └── service/       # Business logic 
 │   │   └── resources/
 │   │       └── application.yml
 │   └── pom.xml
