@@ -1,6 +1,8 @@
 package com.electronics.store.service.impl;
 
 import com.electronics.store.dto.request.ProductRequest;
+import com.electronics.store.dto.request.ProductSearchCriteria;
+import com.electronics.store.dto.response.PagedResponse;
 import com.electronics.store.dto.response.ProductResponse;
 import com.electronics.store.entity.BrandEntity;
 import com.electronics.store.entity.CategoryEntity;
@@ -12,18 +14,27 @@ import com.electronics.store.mapper.ProductMapper;
 import com.electronics.store.repository.BrandRepository;
 import com.electronics.store.repository.CategoryRepository;
 import com.electronics.store.repository.ProductRepository;
+import com.electronics.store.repository.ProductSpecification;
 import com.electronics.store.service.ProductService;
 import com.electronics.store.util.SlugUtils;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 
-import java.util.List;
+import java.util.Locale;
+import java.util.Set;
 
 @Service
 @RequiredArgsConstructor
 @Transactional(readOnly = true)
 public class ProductServiceImpl implements ProductService {
+
+    private static final int MAX_PAGE_SIZE = 100;
+    private static final Set<String> ALLOWED_SORT_FIELDS = Set.of("price", "name", "createdAt");
 
     private final ProductRepository productRepository;
     private final CategoryRepository categoryRepository;
@@ -31,10 +42,13 @@ public class ProductServiceImpl implements ProductService {
     private final ProductMapper productMapper;
 
     @Override
-    public List<ProductResponse> getAllProducts() {
-        return productRepository.findAll().stream()
-                .map(productMapper::toResponse)
-                .toList();
+    public PagedResponse<ProductResponse> searchProducts(ProductSearchCriteria criteria) {
+        validateSearchCriteria(criteria);
+        Pageable pageable = PageRequest.of(criteria.page(), criteria.size(), parseSort(criteria.sort()));
+        Page<ProductResponse> products = productRepository
+                .findAll(ProductSpecification.withCriteria(criteria), pageable)
+                .map(productMapper::toResponse);
+        return PagedResponse.from(products);
     }
 
     @Override
@@ -119,6 +133,44 @@ public class ProductServiceImpl implements ProductService {
                 throw new IllegalArgumentException("Discount price cannot be greater than regular price");
             }
         }
+    }
+
+    private void validateSearchCriteria(ProductSearchCriteria criteria) {
+        if (criteria.page() < 0) {
+            throw new IllegalArgumentException("Page must be greater than or equal to 0");
+        }
+        if (criteria.size() <= 0) {
+            throw new IllegalArgumentException("Size must be greater than 0");
+        }
+        if (criteria.size() > MAX_PAGE_SIZE) {
+            throw new IllegalArgumentException("Size must not exceed " + MAX_PAGE_SIZE);
+        }
+        if (criteria.minPrice() != null && criteria.minPrice().signum() < 0) {
+            throw new IllegalArgumentException("Minimum price must be greater than or equal to 0");
+        }
+        if (criteria.maxPrice() != null && criteria.maxPrice().signum() < 0) {
+            throw new IllegalArgumentException("Maximum price must be greater than or equal to 0");
+        }
+        if (criteria.minPrice() != null && criteria.maxPrice() != null
+                && criteria.minPrice().compareTo(criteria.maxPrice()) > 0) {
+            throw new IllegalArgumentException("Minimum price must not be greater than maximum price");
+        }
+    }
+
+    private Sort parseSort(String sortValue) {
+        String value = sortValue == null || sortValue.isBlank() ? "createdAt,desc" : sortValue.trim();
+        String[] parts = value.split(",", -1);
+        if (parts.length != 2 || !ALLOWED_SORT_FIELDS.contains(parts[0])) {
+            throw new IllegalArgumentException("Sort must use an allowed field: price, name, createdAt");
+        }
+
+        Sort.Direction direction;
+        try {
+            direction = Sort.Direction.fromString(parts[1].toUpperCase(Locale.ROOT));
+        } catch (IllegalArgumentException exception) {
+            throw new IllegalArgumentException("Sort direction must be asc or desc");
+        }
+        return Sort.by(direction, parts[0]);
     }
 
     private String generateUniqueSlug(String name, Long currentId) {

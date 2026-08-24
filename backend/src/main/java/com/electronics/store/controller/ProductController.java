@@ -1,8 +1,11 @@
 package com.electronics.store.controller;
 
 import com.electronics.store.dto.request.ProductRequest;
+import com.electronics.store.dto.request.ProductSearchCriteria;
 import com.electronics.store.dto.response.ApiResponse;
+import com.electronics.store.dto.response.PagedResponse;
 import com.electronics.store.dto.response.ProductResponse;
+import com.electronics.store.entity.ProductStatus;
 import com.electronics.store.service.ProductService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -15,9 +18,10 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
-import java.util.List;
+import java.math.BigDecimal;
 
 /**
  * Controller handling public and administrative Product endpoints.
@@ -34,8 +38,21 @@ public class ProductController {
      * GET /api/products
      */
     @GetMapping("/products")
-    public ResponseEntity<ApiResponse<List<ProductResponse>>> getAllProducts() {
-        List<ProductResponse> products = productService.getAllProducts();
+    public ResponseEntity<ApiResponse<PagedResponse<ProductResponse>>> getAllProducts(
+            @RequestParam(required = false) String keyword,
+            @RequestParam(required = false) Long categoryId,
+            @RequestParam(required = false) Long brandId,
+            @RequestParam(required = false) BigDecimal minPrice,
+            @RequestParam(required = false) BigDecimal maxPrice,
+            @RequestParam(required = false) ProductStatus status,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "12") int size,
+            @RequestParam(defaultValue = "createdAt,desc") String sort
+    ) {
+        ProductSearchCriteria criteria = new ProductSearchCriteria(
+                keyword, categoryId, brandId, minPrice, maxPrice, status, page, size, sort
+        );
+        PagedResponse<ProductResponse> products = productService.searchProducts(criteria);
         return ResponseEntity.ok(ApiResponse.ok("Products retrieved successfully", products));
     }
 

@@ -1,8 +1,10 @@
 package com.electronics.store.controller;
 
 import com.electronics.store.dto.request.ProductRequest;
+import com.electronics.store.dto.request.ProductSearchCriteria;
 import com.electronics.store.dto.response.BrandSummaryResponse;
 import com.electronics.store.dto.response.CategorySummaryResponse;
+import com.electronics.store.dto.response.PagedResponse;
 import com.electronics.store.dto.response.ProductResponse;
 import com.electronics.store.entity.ProductStatus;
 import com.electronics.store.exception.DuplicateResourceException;
@@ -68,16 +70,38 @@ class ProductControllerTest {
     @Test
     void getAllProducts_shouldReturnOk() throws Exception {
         ProductResponse product = buildSampleResponse();
-        when(productService.getAllProducts()).thenReturn(List.of(product));
+        when(productService.searchProducts(any(ProductSearchCriteria.class)))
+                .thenReturn(new PagedResponse<>(List.of(product), 0, 12, 1, 1, true, true));
 
-        mockMvc.perform(get("/api/products"))
+        mockMvc.perform(get("/api/products").param("keyword", "ASUS"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.success").value(true))
-                .andExpect(jsonPath("$.data[0].id").value(1))
-                .andExpect(jsonPath("$.data[0].name").value("ASUS TUF Gaming F15"))
-                .andExpect(jsonPath("$.data[0].slug").value("asus-tuf-gaming-f15"))
-                .andExpect(jsonPath("$.data[0].category.name").value("Laptop"))
-                .andExpect(jsonPath("$.data[0].brand.name").value("ASUS"));
+                .andExpect(jsonPath("$.data.content[0].id").value(1))
+                .andExpect(jsonPath("$.data.content[0].name").value("ASUS TUF Gaming F15"))
+                .andExpect(jsonPath("$.data.page").value(0))
+                .andExpect(jsonPath("$.data.size").value(12))
+                .andExpect(jsonPath("$.data.totalElements").value(1))
+                .andExpect(jsonPath("$.data.first").value(true))
+                .andExpect(jsonPath("$.data.last").value(true));
+    }
+
+    @Test
+    void getAllProducts_whenServiceRejectsCriteria_shouldReturn400() throws Exception {
+        when(productService.searchProducts(any(ProductSearchCriteria.class)))
+                .thenThrow(new IllegalArgumentException("Size must not exceed 100"));
+
+        mockMvc.perform(get("/api/products").param("size", "101"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.success").value(false))
+                .andExpect(jsonPath("$.message").value("Size must not exceed 100"));
+    }
+
+    @Test
+    void getAllProducts_whenStatusIsInvalid_shouldReturn400() throws Exception {
+        mockMvc.perform(get("/api/products").param("status", "UNKNOWN"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.success").value(false))
+                .andExpect(jsonPath("$.message").value("Invalid value for parameter 'status'"));
     }
 
     @Test
