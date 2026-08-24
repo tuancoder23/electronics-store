@@ -1,6 +1,8 @@
 package com.electronics.store.service;
 
 import com.electronics.store.dto.request.ProductRequest;
+import com.electronics.store.dto.request.ProductSearchCriteria;
+import com.electronics.store.dto.response.PagedResponse;
 import com.electronics.store.dto.response.ProductResponse;
 import com.electronics.store.entity.BrandEntity;
 import com.electronics.store.entity.CategoryEntity;
@@ -20,6 +22,9 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.Spy;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.jpa.domain.Specification;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
@@ -94,17 +99,39 @@ class ProductServiceTest {
     }
 
     @Test
-    void getAllProducts_shouldReturnList() {
-        when(productRepository.findAll()).thenReturn(List.of(sampleProduct));
+    void searchProducts_shouldReturnPagedResponse() {
+        ProductSearchCriteria criteria = new ProductSearchCriteria(
+                "asus", 1L, 1L, BigDecimal.ZERO, new BigDecimal("30000000"),
+                ProductStatus.ACTIVE, 0, 12, "price,asc"
+        );
+        when(productRepository.findAll(any(Specification.class), any(Pageable.class)))
+                .thenReturn(new PageImpl<>(List.of(sampleProduct)));
 
-        List<ProductResponse> result = productService.getAllProducts();
+        PagedResponse<ProductResponse> result = productService.searchProducts(criteria);
 
-        assertEquals(1, result.size());
-        assertEquals("ASUS TUF Gaming F15", result.get(0).name());
-        assertEquals("asus-tuf-gaming-f15", result.get(0).slug());
-        assertEquals(new BigDecimal("25990000"), result.get(0).price());
-        assertEquals("Laptop", result.get(0).category().name());
-        assertEquals("ASUS", result.get(0).brand().name());
+        assertEquals(1, result.content().size());
+        assertEquals("ASUS TUF Gaming F15", result.content().get(0).name());
+        assertEquals(0, result.page());
+        assertEquals(1, result.totalElements());
+    }
+
+    @Test
+    void searchProducts_whenMinimumPriceExceedsMaximum_shouldThrow() {
+        ProductSearchCriteria criteria = new ProductSearchCriteria(
+                null, null, null, new BigDecimal("200"), new BigDecimal("100"),
+                null, 0, 12, "createdAt,desc"
+        );
+
+        assertThrows(IllegalArgumentException.class, () -> productService.searchProducts(criteria));
+    }
+
+    @Test
+    void searchProducts_whenSortIsInvalid_shouldThrow() {
+        ProductSearchCriteria criteria = new ProductSearchCriteria(
+                null, null, null, null, null, null, 0, 12, "unknown,asc"
+        );
+
+        assertThrows(IllegalArgumentException.class, () -> productService.searchProducts(criteria));
     }
 
     @Test

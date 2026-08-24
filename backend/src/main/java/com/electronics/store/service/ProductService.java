@@ -1,16 +1,16 @@
 package com.electronics.store.service;
 
 import com.electronics.store.dto.request.ProductRequest;
+import com.electronics.store.dto.request.ProductSearchCriteria;
+import com.electronics.store.dto.response.PagedResponse;
 import com.electronics.store.dto.response.ProductResponse;
-
-import java.util.List;
 
 /**
  * Service interface for Product operations.
  */
 public interface ProductService {
 
-    List<ProductResponse> getAllProducts();
+    PagedResponse<ProductResponse> searchProducts(ProductSearchCriteria criteria);
 
     ProductResponse getProductById(Long id);
 
