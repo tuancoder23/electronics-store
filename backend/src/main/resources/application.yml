@@ -25,3 +25,8 @@ logging:
   level:
     com.electronics.store: DEBUG
     org.springframework.web: INFO
+
+app:
+  jwt:
+    secret: ${JWT_SECRET:}
+    expiration-ms: ${JWT_EXPIRATION_MS:86400000}
