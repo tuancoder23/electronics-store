@@ -67,6 +67,7 @@ public class SecurityConfig {
                                 "/api/products/**", "/api/categories/**", "/api/brands/**",
                                 "/api/product-images/**", "/api/product-specifications/**").permitAll()
                         .requestMatchers("/api/admin/**").hasRole("ADMIN")
+                        .requestMatchers("/api/cart/**", "/api/cart").authenticated()
                         .requestMatchers("/api/users/me").authenticated()
                         .anyRequest().authenticated())
                 .authenticationProvider(authenticationProvider)
