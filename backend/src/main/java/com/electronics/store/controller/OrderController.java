@@ -35,4 +35,10 @@ public class OrderController {
         return ResponseEntity.ok(ApiResponse.ok("Order retrieved successfully",
                 orderService.getCurrentUserOrderById(orderId)));
     }
+
+    @PutMapping("/{orderId}/cancel")
+    public ResponseEntity<ApiResponse<OrderResponse>> cancelOrder(@PathVariable Long orderId) {
+        return ResponseEntity.ok(ApiResponse.ok("Order cancelled successfully",
+                orderService.cancelCurrentUserOrder(orderId)));
+    }
 }
