@@ -47,6 +47,7 @@ class OrderIntegrationTest {
     @Autowired CartItemRepository cartItems;
     @Autowired OrderRepository orders;
     @Autowired OrderItemRepository orderItems;
+    @Autowired PaymentRepository payments;
     @Autowired TransactionTemplate transaction;
 
     private UserEntity userA;
@@ -57,6 +58,7 @@ class OrderIntegrationTest {
 
     @BeforeEach
     void setUp() {
+        payments.deleteAll();
         orderItems.deleteAll();
         orders.deleteAll();
         cartItems.deleteAll();

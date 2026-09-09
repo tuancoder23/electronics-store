@@ -3,13 +3,16 @@ package com.electronics.store.entity;
 import com.fasterxml.jackson.annotation.JsonCreator;
 
 public enum PaymentMethod {
-    COD;
+    COD,
+    VNPAY;
 
     @JsonCreator
     public static PaymentMethod fromJson(String value) {
-        if (!"COD".equals(value)) {
-            throw new IllegalArgumentException("Unsupported payment method. Only COD is supported");
+        for (PaymentMethod method : values()) {
+            if (method.name().equals(value)) {
+                return method;
+            }
         }
-        return COD;
+        throw new IllegalArgumentException("Unsupported payment method. Only COD is supported");
     }
 }

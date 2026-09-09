@@ -20,6 +20,7 @@ public record OrderResponse(
         PaymentMethod paymentMethod,
         List<OrderItemResponse> items,
         LocalDateTime createdAt,
-        LocalDateTime updatedAt
+        LocalDateTime updatedAt,
+        PaymentResponse payment
 ) {
 }
