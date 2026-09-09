@@ -1,6 +1,8 @@
 package com.electronics.store.service.impl;
 
 import com.electronics.store.dto.request.CheckoutRequest;
+import com.electronics.store.dto.request.OrderSearchCriteria;
+import com.electronics.store.dto.request.UpdateOrderStatusRequest;
 import com.electronics.store.dto.response.OrderResponse;
 import com.electronics.store.dto.response.PagedResponse;
 import com.electronics.store.entity.*;
@@ -11,6 +13,7 @@ import com.electronics.store.repository.*;
 import com.electronics.store.service.OrderService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
@@ -97,6 +100,82 @@ public class OrderServiceImpl implements OrderService {
         OrderEntity order = orderRepository.findByIdAndUserId(orderId, currentUser().getId())
                 .orElseThrow(() -> new ResourceNotFoundException("Order not found with id: " + orderId));
         return orderMapper.toResponse(order);
+    }
+
+    @Override
+    public PagedResponse<OrderResponse> getAllOrders(OrderSearchCriteria criteria, int page, int size) {
+        if (page < 0 || size < 1 || size > 100) {
+            throw new IllegalArgumentException("Page must be non-negative and size must be between 1 and 100");
+        }
+        if (criteria.userId() != null && criteria.userId() < 1) {
+            throw new IllegalArgumentException("User ID must be positive");
+        }
+        if (criteria.fromDate() != null && criteria.toDate() != null
+                && criteria.fromDate().isAfter(criteria.toDate())) {
+            throw new IllegalArgumentException("From date must not be after to date");
+        }
+        PageRequest pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "createdAt", "id"));
+        return PagedResponse.from(orderRepository.findAll(OrderSpecification.withCriteria(criteria), pageable)
+                .map(orderMapper::toResponse));
+    }
+
+    @Override
+    public OrderResponse getOrderByIdForAdmin(Long orderId) {
+        return orderMapper.toResponse(orderRepository.findById(orderId)
+                .orElseThrow(() -> new ResourceNotFoundException("Order not found with id: " + orderId)));
+    }
+
+    @Override
+    @Transactional(isolation = Isolation.READ_COMMITTED)
+    public OrderResponse updateOrderStatus(Long orderId, UpdateOrderStatusRequest request) {
+        if (request.status() == null) {
+            throw new IllegalArgumentException("Order status is required");
+        }
+        // Read status only after acquiring the lock: concurrent updates cannot validate stale state.
+        OrderEntity order = orderRepository.findByIdForUpdate(orderId)
+                .orElseThrow(() -> new ResourceNotFoundException("Order not found with id: " + orderId));
+        validateTransition(order.getStatus(), request.status());
+        if (request.status() == OrderStatus.CANCELLED) {
+            restoreStock(order);
+        }
+        order.setStatus(request.status());
+        // Flush stock and status together; any failure rolls the entire transaction back.
+        orderRepository.saveAndFlush(order);
+        return orderMapper.toResponse(order);
+    }
+
+    private void validateTransition(OrderStatus current, OrderStatus desired) {
+        boolean allowed = switch (current) {
+            case PENDING -> desired == OrderStatus.CONFIRMED || desired == OrderStatus.CANCELLED;
+            case CONFIRMED -> desired == OrderStatus.SHIPPING || desired == OrderStatus.CANCELLED;
+            case SHIPPING -> desired == OrderStatus.DELIVERED;
+            case DELIVERED, CANCELLED -> false;
+        };
+        if (!allowed) {
+            throw new IllegalArgumentException("Cannot change order status from " + current + " to " + desired);
+        }
+    }
+
+    private void restoreStock(OrderEntity order) {
+        // Match checkout's product lock order to avoid deadlocks and lost stock updates.
+        List<OrderItemEntity> items = order.getItems().stream()
+                .sorted(Comparator.comparing(OrderItemEntity::getProductId)).toList();
+        for (OrderItemEntity item : items) {
+            ProductEntity product = productRepository.findByIdForUpdate(item.getProductId())
+                    .orElseThrow(() -> new IllegalArgumentException(
+                            "Cannot cancel order: product no longer exists with id: " + item.getProductId()));
+            Integer stock = product.getQuantity();
+            Integer quantity = item.getQuantity();
+            if (stock == null || stock < 0 || quantity == null || quantity < 1
+                    || stock > Integer.MAX_VALUE - quantity) {
+                throw new IllegalArgumentException("Cannot restore stock for product with id: " + item.getProductId());
+            }
+            product.setQuantity(stock + quantity);
+            if (product.getStatus() == ProductStatus.OUT_OF_STOCK && product.getQuantity() > 0) {
+                product.setStatus(ProductStatus.ACTIVE);
+            }
+            productRepository.save(product);
+        }
     }
 
     private UserEntity currentUser() {
