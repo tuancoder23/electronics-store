@@ -11,6 +11,7 @@ import com.electronics.store.exception.ResourceNotFoundException;
 import com.electronics.store.mapper.OrderMapper;
 import com.electronics.store.repository.*;
 import com.electronics.store.service.OrderService;
+import com.electronics.store.service.PaymentService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
@@ -34,6 +35,7 @@ public class OrderServiceImpl implements OrderService {
     private final ProductRepository productRepository;
     private final UserRepository userRepository;
     private final OrderMapper orderMapper;
+    private final PaymentService paymentService;
 
     @Override
     @Transactional(isolation = Isolation.READ_COMMITTED)
@@ -78,6 +80,7 @@ public class OrderServiceImpl implements OrderService {
         order.setShippingFee(BigDecimal.ZERO);
         order.setTotalAmount(subtotal.add(order.getShippingFee()));
         orderRepository.saveAndFlush(order);
+        paymentService.createPaymentForOrder(order.getId());
         cartItemRepository.deleteAll(cartItems);
         cart.touch();
         cartRepository.save(cart);
@@ -130,6 +133,7 @@ public class OrderServiceImpl implements OrderService {
         }
         restoreStock(order);
         order.setStatus(OrderStatus.CANCELLED);
+        paymentService.cancelPendingPayment(order.getId());
         orderRepository.saveAndFlush(order);
         return orderMapper.toResponse(order);
     }
@@ -154,7 +158,12 @@ public class OrderServiceImpl implements OrderService {
             restoreStock(order);
         }
         order.setStatus(request.status());
-        // Flush stock and status together; any failure rolls the entire transaction back.
+        if (request.status() == OrderStatus.CANCELLED) {
+            paymentService.cancelPendingPayment(order.getId());
+        } else if (request.status() == OrderStatus.DELIVERED && order.getPaymentMethod() == PaymentMethod.COD) {
+            paymentService.markCodAsPaid(order.getId());
+        }
+        // Flush stock, order and payment together; any failure rolls the entire transaction back.
         orderRepository.saveAndFlush(order);
         return orderMapper.toResponse(order);
     }

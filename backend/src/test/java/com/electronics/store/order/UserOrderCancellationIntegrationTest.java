@@ -45,6 +45,7 @@ class UserOrderCancellationIntegrationTest {
     @Autowired CartItemRepository cartItems;
     @Autowired OrderRepository orders;
     @Autowired OrderItemRepository orderItems;
+    @Autowired PaymentRepository payments;
     @Autowired TransactionTemplate transaction;
     @Autowired JdbcTemplate jdbc;
 
@@ -57,6 +58,7 @@ class UserOrderCancellationIntegrationTest {
 
     @BeforeEach
     void setUp() {
+        payments.deleteAll();
         orderItems.deleteAll();
         orders.deleteAll();
         cartItems.deleteAll();

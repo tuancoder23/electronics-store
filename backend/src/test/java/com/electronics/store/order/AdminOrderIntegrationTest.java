@@ -52,6 +52,7 @@ class AdminOrderIntegrationTest {
     @Autowired CartItemRepository cartItems;
     @Autowired OrderRepository orders;
     @Autowired OrderItemRepository orderItems;
+    @Autowired PaymentRepository payments;
     @Autowired TransactionTemplate transaction;
     @Autowired JdbcTemplate jdbc;
 
@@ -64,6 +65,7 @@ class AdminOrderIntegrationTest {
 
     @BeforeEach
     void setUp() throws Exception {
+        payments.deleteAll();
         orderItems.deleteAll();
         orders.deleteAll();
         cartItems.deleteAll();

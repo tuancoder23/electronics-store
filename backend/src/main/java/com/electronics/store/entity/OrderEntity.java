@@ -72,6 +72,10 @@ public class OrderEntity {
     @Column(name = "payment_method", nullable = false, length = 20)
     private PaymentMethod paymentMethod;
 
+    // Optional for orders created before payment support; lifecycle is managed by PaymentService.
+    @OneToOne(mappedBy = "order", fetch = FetchType.LAZY)
+    private PaymentEntity payment;
+
     @OneToMany(mappedBy = "order", cascade = CascadeType.ALL, orphanRemoval = true)
     @OrderBy("id ASC")
     @Builder.Default
