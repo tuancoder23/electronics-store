@@ -17,10 +17,11 @@ import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.annotation.Isolation;
 
 @Service
 @RequiredArgsConstructor
-@Transactional(readOnly = true)
+@Transactional(readOnly = true, isolation = Isolation.READ_COMMITTED)
 public class CartServiceImpl implements CartService {
     private final CartRepository cartRepository;
     private final CartItemRepository cartItemRepository;
@@ -29,13 +30,13 @@ public class CartServiceImpl implements CartService {
     private final CartMapper cartMapper;
 
     @Override
-    @Transactional
+    @Transactional(isolation = Isolation.READ_COMMITTED)
     public CartResponse getCurrentUserCart() {
         return response(getOrCreateCart(currentUser()));
     }
 
     @Override
-    @Transactional
+    @Transactional(isolation = Isolation.READ_COMMITTED)
     public CartResponse addItem(AddCartItemRequest request) {
         CartEntity cart = getOrCreateCart(currentUser());
         ProductEntity product = productRepository.findById(request.productId())
@@ -53,7 +54,7 @@ public class CartServiceImpl implements CartService {
     }
 
     @Override
-    @Transactional
+    @Transactional(isolation = Isolation.READ_COMMITTED)
     public CartResponse updateItem(Long cartItemId, UpdateCartItemRequest request) {
         CartEntity cart = getOrCreateCart(currentUser());
         CartItemEntity item = ownedItem(cartItemId, cart);
@@ -66,7 +67,7 @@ public class CartServiceImpl implements CartService {
     }
 
     @Override
-    @Transactional
+    @Transactional(isolation = Isolation.READ_COMMITTED)
     public CartResponse removeItem(Long cartItemId) {
         CartEntity cart = getOrCreateCart(currentUser());
         CartItemEntity item = ownedItem(cartItemId, cart);
@@ -77,7 +78,7 @@ public class CartServiceImpl implements CartService {
     }
 
     @Override
-    @Transactional
+    @Transactional(isolation = Isolation.READ_COMMITTED)
     public CartResponse clearCart() {
         CartEntity cart = getOrCreateCart(currentUser());
         cartItemRepository.deleteByCartId(cart.getId());
@@ -96,7 +97,7 @@ public class CartServiceImpl implements CartService {
     }
 
     private CartEntity getOrCreateCart(UserEntity user) {
-        return cartRepository.findByUserId(user.getId())
+        return cartRepository.findByUserIdForUpdate(user.getId())
                 .orElseGet(() -> cartRepository.save(CartEntity.builder().user(user).build()));
     }
 
