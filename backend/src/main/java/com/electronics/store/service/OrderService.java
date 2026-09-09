@@ -10,6 +10,7 @@ public interface OrderService {
     OrderResponse createOrderFromCurrentCart(CheckoutRequest request);
     PagedResponse<OrderResponse> getCurrentUserOrders(int page, int size);
     OrderResponse getCurrentUserOrderById(Long orderId);
+    OrderResponse cancelCurrentUserOrder(Long orderId);
     PagedResponse<OrderResponse> getAllOrders(OrderSearchCriteria criteria, int page, int size);
     OrderResponse getOrderByIdForAdmin(Long orderId);
     OrderResponse updateOrderStatus(Long orderId, UpdateOrderStatusRequest request);

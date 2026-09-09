@@ -20,6 +20,10 @@ public interface OrderRepository extends JpaRepository<OrderEntity, Long>, JpaSp
     @Query("select o from OrderEntity o where o.id = :id")
     Optional<OrderEntity> findByIdForUpdate(@Param("id") Long id);
 
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("select o from OrderEntity o where o.id = :id and o.user.id = :userId")
+    Optional<OrderEntity> findByIdAndUserIdForUpdate(@Param("id") Long id, @Param("userId") Long userId);
+
     Page<OrderEntity> findByUserIdOrderByCreatedAtDescIdDesc(Long userId, Pageable pageable);
 
     @EntityGraph(attributePaths = "items")

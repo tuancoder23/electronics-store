@@ -120,6 +120,21 @@ public class OrderServiceImpl implements OrderService {
     }
 
     @Override
+    @Transactional(isolation = Isolation.READ_COMMITTED)
+    public OrderResponse cancelCurrentUserOrder(Long orderId) {
+        // Ownership and the lock use one query; share the order row lock with admin updates.
+        OrderEntity order = orderRepository.findByIdAndUserIdForUpdate(orderId, currentUser().getId())
+                .orElseThrow(() -> new ResourceNotFoundException("Order not found with id: " + orderId));
+        if (order.getStatus() != OrderStatus.PENDING) {
+            throw new IllegalArgumentException("Only PENDING orders can be cancelled by the user");
+        }
+        restoreStock(order);
+        order.setStatus(OrderStatus.CANCELLED);
+        orderRepository.saveAndFlush(order);
+        return orderMapper.toResponse(order);
+    }
+
+    @Override
     public OrderResponse getOrderByIdForAdmin(Long orderId) {
         return orderMapper.toResponse(orderRepository.findById(orderId)
                 .orElseThrow(() -> new ResourceNotFoundException("Order not found with id: " + orderId)));
