@@ -1,6 +1,7 @@
 package com.electronics.store.service.impl;
 
 import com.electronics.store.dto.request.CheckoutRequest;
+import com.electronics.store.config.VnPayProperties;
 import com.electronics.store.dto.request.OrderSearchCriteria;
 import com.electronics.store.dto.request.UpdateOrderStatusRequest;
 import com.electronics.store.dto.response.OrderResponse;
@@ -36,13 +37,17 @@ public class OrderServiceImpl implements OrderService {
     private final UserRepository userRepository;
     private final OrderMapper orderMapper;
     private final PaymentService paymentService;
+    private final VnPayProperties vnPayProperties;
 
     @Override
     @Transactional(isolation = Isolation.READ_COMMITTED)
     public OrderResponse createOrderFromCurrentCart(CheckoutRequest request) {
         UserEntity user = currentUser();
-        if (request.paymentMethod() != PaymentMethod.COD) {
-            throw new IllegalArgumentException("Unsupported payment method. Only COD is supported");
+        if (request.paymentMethod() == null) {
+            throw new IllegalArgumentException("Payment method is required");
+        }
+        if (request.paymentMethod() == PaymentMethod.VNPAY) {
+            vnPayProperties.requireConfigured();
         }
         // Shared with cart mutations: a second checkout must see the cleared cart after waiting.
         CartEntity cart = cartRepository.findByUserIdForUpdate(user.getId())

@@ -26,7 +26,7 @@ public class GlobalExceptionHandler {
     public ResponseEntity<ApiResponse<Void>> handleUnreadableBody(HttpMessageNotReadableException ex) {
         String message = "Invalid request body or unsupported field value";
         if (ex.getMostSpecificCause() instanceof IllegalArgumentException cause
-                && "Unsupported payment method. Only COD is supported".equals(cause.getMessage())) {
+                && "Unsupported payment method. Use COD or VNPAY".equals(cause.getMessage())) {
             message = cause.getMessage();
         }
         return ResponseEntity.badRequest().body(ApiResponse.error(message));
