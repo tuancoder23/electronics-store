@@ -44,6 +44,15 @@ public class PaymentEntity {
     @Column(name = "transaction_code", length = 255)
     private String transactionCode;
 
+    @Column(name = "gateway_reference", length = 100, unique = true)
+    private String gatewayReference;
+
+    @Column(name = "gateway_payment_url", length = 2048)
+    private String gatewayPaymentUrl;
+
+    @Column(name = "gateway_expires_at")
+    private LocalDateTime gatewayExpiresAt;
+
     @Column(name = "paid_at")
     private LocalDateTime paidAt;
 

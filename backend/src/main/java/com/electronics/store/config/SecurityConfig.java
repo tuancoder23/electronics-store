@@ -64,6 +64,9 @@ public class SecurityConfig {
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers("/api/health", "/api/auth/register", "/api/auth/login").permitAll()
                         .requestMatchers(org.springframework.http.HttpMethod.GET,
+                                "/api/payments/vnpay/return", "/api/payments/vnpay/ipn").permitAll()
+                        .requestMatchers("/api/payments/vnpay/create/**").authenticated()
+                        .requestMatchers(org.springframework.http.HttpMethod.GET,
                                 "/api/products/**", "/api/categories/**", "/api/brands/**",
                                 "/api/product-images/**", "/api/product-specifications/**").permitAll()
                         .requestMatchers("/api/admin/**").hasRole("ADMIN")

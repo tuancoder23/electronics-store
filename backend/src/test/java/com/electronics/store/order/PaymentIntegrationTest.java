@@ -128,13 +128,13 @@ class PaymentIntegrationTest {
     }
 
     @Test
-    void vnpayEnumExistsButCheckoutDoesNotEnableGateway() throws Exception {
+    void vnpayCheckoutRemainsDisabledWithoutSandboxConfiguration() throws Exception {
         assertThat(json.readValue("\"VNPAY\"", PaymentMethod.class)).isEqualTo(PaymentMethod.VNPAY);
         add(tokenA, productA, 2);
         ResponseEntity<String> response = call(HttpMethod.POST, "/api/orders", tokenA,
                 checkoutBody().replace("COD", "VNPAY"));
         error(response, 400);
-        assertThat(json.readTree(response.getBody()).path("message").asText()).contains("Only COD");
+        assertThat(json.readTree(response.getBody()).path("message").asText()).contains("VNPAY sandbox");
         assertCheckoutRolledBack(1, 2);
     }
 
@@ -275,6 +275,9 @@ class PaymentIntegrationTest {
     @Test
     void failureAfterPaymentInsertAlsoRollsBackPaymentAndCartClear() throws Exception {
         add(tokenA, productA, 2);
+        // Use a historical timestamp: two real-time writes can share the same Windows clock tick.
+        jdbc.update("update carts set updated_at=? where id=?", LocalDateTime.of(2000, 1, 1, 0, 0),
+                carts.findAll().get(0).getId());
         // The existing cart row is valid; checkout's final touch/flush violates this constraint.
         jdbc.execute("alter table carts add constraint test_cart_touch_failure check (updated_at <= timestamp '"
                 + carts.findAll().get(0).getUpdatedAt() + "')");

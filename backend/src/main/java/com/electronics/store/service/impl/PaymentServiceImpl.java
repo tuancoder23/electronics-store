@@ -1,6 +1,8 @@
 package com.electronics.store.service.impl;
 
 import com.electronics.store.entity.*;
+import com.electronics.store.config.VnPayProperties;
+import com.electronics.store.util.VnPaySigner;
 import com.electronics.store.exception.DuplicateResourceException;
 import com.electronics.store.exception.ResourceNotFoundException;
 import com.electronics.store.repository.OrderRepository;
@@ -19,6 +21,7 @@ import java.time.LocalDateTime;
 public class PaymentServiceImpl implements PaymentService {
     private final PaymentRepository paymentRepository;
     private final OrderRepository orderRepository;
+    private final VnPayProperties vnPayProperties;
 
     @Override
     public void createPaymentForOrder(Long orderId) {
@@ -29,7 +32,7 @@ public class PaymentServiceImpl implements PaymentService {
         if (paymentRepository.existsByOrderId(orderId)) {
             throw new DuplicateResourceException("Payment already exists for order: " + orderId);
         }
-        createPendingCodPayment(order);
+        createPendingPayment(order);
     }
 
     @Override
@@ -75,7 +78,12 @@ public class PaymentServiceImpl implements PaymentService {
     private PaymentEntity paymentForTransition(OrderEntity order) {
         // Legacy COD orders have no payment row. Fill it only during a valid lifecycle mutation.
         PaymentEntity payment = paymentRepository.findByOrderId(order.getId())
-                .orElseGet(() -> createPendingCodPayment(order));
+                .orElseGet(() -> {
+                    if (order.getPaymentMethod() != PaymentMethod.COD) {
+                        throw new IllegalArgumentException("VNPAY payment is missing for order: " + order.getId());
+                    }
+                    return createPendingPayment(order);
+                });
         if (payment.getMethod() != order.getPaymentMethod()
                 || payment.getAmount().compareTo(order.getTotalAmount()) != 0) {
             throw new IllegalArgumentException("Payment does not match order: " + order.getId());
@@ -84,14 +92,15 @@ public class PaymentServiceImpl implements PaymentService {
         return payment;
     }
 
-    private PaymentEntity createPendingCodPayment(OrderEntity order) {
-        if (order.getPaymentMethod() != PaymentMethod.COD) {
-            throw new IllegalArgumentException("Unsupported payment method. Only COD is supported");
+    private PaymentEntity createPendingPayment(OrderEntity order) {
+        if (order.getPaymentMethod() == PaymentMethod.VNPAY) {
+            vnPayProperties.requireConfigured();
+            VnPaySigner.amount(order.getTotalAmount());
         }
         if (order.getTotalAmount() == null || order.getTotalAmount().signum() < 0) {
             throw new IllegalArgumentException("Order total amount must be non-negative");
         }
-        PaymentEntity payment = PaymentEntity.builder().order(order).method(PaymentMethod.COD)
+        PaymentEntity payment = PaymentEntity.builder().order(order).method(order.getPaymentMethod())
                 .status(PaymentStatus.PENDING).amount(order.getTotalAmount()).build();
         paymentRepository.saveAndFlush(payment);
         order.setPayment(payment);

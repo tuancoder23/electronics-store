@@ -13,6 +13,6 @@ public enum PaymentMethod {
                 return method;
             }
         }
-        throw new IllegalArgumentException("Unsupported payment method. Only COD is supported");
+        throw new IllegalArgumentException("Unsupported payment method. Use COD or VNPAY");
     }
 }

@@ -11,7 +11,7 @@ public record CheckoutRequest(
         @NotBlank(message = "Phone is required") @Size(max = 30) String phone,
         @NotBlank(message = "Shipping address is required") @Size(max = 500) String shippingAddress,
         @Size(max = 2000) String note,
-        @NotNull(message = "Payment method is required; only COD is supported") PaymentMethod paymentMethod
+        @NotNull(message = "Payment method is required") PaymentMethod paymentMethod
 ) {
     @JsonAnySetter
     public void rejectUnknownField(String name, Object value) {
