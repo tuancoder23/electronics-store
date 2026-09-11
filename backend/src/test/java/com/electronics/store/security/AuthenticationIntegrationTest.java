@@ -7,7 +7,10 @@ import com.electronics.store.repository.UserRepository;
 import com.electronics.store.service.*;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.http.MediaType;
@@ -15,11 +18,11 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
-import java.time.LocalDateTime;
-import java.util.Optional;
+import java.nio.charset.StandardCharsets;
+import java.time.Instant;
+import java.util.Date;
 
 import static org.hamcrest.Matchers.not;
-import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
@@ -29,6 +32,7 @@ class AuthenticationIntegrationTest {
     @Autowired MockMvc mockMvc;
     @Autowired PasswordEncoder passwordEncoder;
     @Autowired JwtService jwtService;
+    @Value("${app.jwt.secret}") String testJwtSecret;
 
     @Autowired UserRepository userRepository;
     @MockitoBean ProductService productService;
@@ -125,6 +129,58 @@ class AuthenticationIntegrationTest {
         for (String path : paths) {
             mockMvc.perform(get(path)).andExpect(status().is(not(401))).andExpect(status().is(not(403)));
         }
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"empty", "no-subject", "no-expiration", "expired"})
+    void incompleteOrExpiredJwtReturns401InsteadOfServerError(String mode) throws Exception {
+        var builder = io.jsonwebtoken.Jwts.builder();
+        if (!mode.equals("no-subject")) builder.subject(user.getEmail());
+        if (!mode.equals("no-expiration")) {
+            builder.expiration(Date.from(Instant.now().plusSeconds(mode.equals("expired") ? -60 : 60)));
+        }
+        String token = mode.equals("empty") ? "" : builder.signWith(io.jsonwebtoken.security.Keys.hmacShaKeyFor(
+                testJwtSecret.getBytes(StandardCharsets.UTF_8))).compact();
+        for (String path : new String[]{"/api/users/me", "/api/products"}) {
+            mockMvc.perform(get(path).header("Authorization", "Bearer " + token))
+                    .andExpect(status().isUnauthorized()).andExpect(jsonPath("$.success").value(false));
+        }
+    }
+
+    @Test
+    void registrationRejectsPasswordsOverBcryptByteLimit() throws Exception {
+        mockMvc.perform(post("/api/auth/register").contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"fullName\":\"User\",\"email\":\"new@example.com\",\"password\":\"" + "é".repeat(37) + "\"}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message").value("Password must not exceed 72 UTF-8 bytes"));
+        org.assertj.core.api.Assertions.assertThat(userRepository.existsByEmail("new@example.com")).isFalse();
+    }
+
+    @Test
+    void configuredCorsPreflightWorksWithoutBypassingAuthentication() throws Exception {
+        mockMvc.perform(options("/api/cart/items").header("Origin", "http://localhost:5173")
+                        .header("Access-Control-Request-Method", "POST")
+                        .header("Access-Control-Request-Headers", "Authorization,Content-Type"))
+                .andExpect(status().isOk())
+                .andExpect(header().string("Access-Control-Allow-Origin", "http://localhost:5173"));
+        mockMvc.perform(post("/api/cart/items").header("Origin", "http://localhost:5173")
+                        .contentType(MediaType.APPLICATION_JSON).content("{}"))
+                .andExpect(status().isUnauthorized());
+        mockMvc.perform(options("/api/cart/items").header("Origin", "https://untrusted.example")
+                        .header("Access-Control-Request-Method", "POST"))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    void authenticationDtosRedactCredentialsWithoutChangingJsonContract() {
+        String password = "sensitive-test-value";
+        String token = "sensitive-test-token";
+        org.assertj.core.api.Assertions.assertThat(new com.electronics.store.dto.request.LoginRequest(
+                "user@example.com", password).toString()).doesNotContain(password);
+        org.assertj.core.api.Assertions.assertThat(new com.electronics.store.dto.request.RegisterRequest(
+                "User", "user@example.com", password, null).toString()).doesNotContain(password);
+        org.assertj.core.api.Assertions.assertThat(new com.electronics.store.dto.response.AuthResponse(
+                token, "Bearer", null).toString()).doesNotContain(token);
     }
 
     private UserEntity createUser(String name, String email, Role role) {

@@ -7,11 +7,12 @@ spring:
   datasource:
     url: ${DB_URL:jdbc:mysql://localhost:3306/electronics_store?createDatabaseIfNotExist=true&useSSL=false&serverTimezone=Asia/Ho_Chi_Minh&allowPublicKeyRetrieval=true}
     username: ${DB_USERNAME:root}
-    password: ${DB_PASSWORD:1234}
+    password: ${DB_PASSWORD:}
   jpa:
+    open-in-view: false
     hibernate:
       ddl-auto: update
-    show-sql: true
+    show-sql: false
     properties:
       hibernate:
         format_sql: true
@@ -23,7 +24,7 @@ spring:
 
 logging:
   level:
-    com.electronics.store: DEBUG
+    com.electronics.store: INFO
     org.springframework.web: INFO
 
 app:

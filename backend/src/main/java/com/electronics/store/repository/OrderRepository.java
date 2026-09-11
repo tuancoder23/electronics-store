@@ -9,6 +9,7 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
 import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.jpa.domain.Specification;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
@@ -24,7 +25,12 @@ public interface OrderRepository extends JpaRepository<OrderEntity, Long>, JpaSp
     @Query("select o from OrderEntity o where o.id = :id and o.user.id = :userId")
     Optional<OrderEntity> findByIdAndUserIdForUpdate(@Param("id") Long id, @Param("userId") Long userId);
 
+    @EntityGraph(attributePaths = "payment")
     Page<OrderEntity> findByUserIdOrderByCreatedAtDescIdDesc(Long userId, Pageable pageable);
+
+    @Override
+    @EntityGraph(attributePaths = "payment")
+    Page<OrderEntity> findAll(Specification<OrderEntity> specification, Pageable pageable);
 
     @EntityGraph(attributePaths = "items")
     Optional<OrderEntity> findByIdAndUserId(Long id, Long userId);

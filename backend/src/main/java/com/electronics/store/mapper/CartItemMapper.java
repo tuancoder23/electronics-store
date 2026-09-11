@@ -9,19 +9,12 @@ import java.math.BigDecimal;
 
 @Component
 public class CartItemMapper {
-    public CartItemResponse toResponse(CartItemEntity entity) {
+    public CartItemResponse toResponse(CartItemEntity entity, BigDecimal effectivePrice, BigDecimal lineTotal) {
         ProductEntity product = entity.getProduct();
-        BigDecimal effectivePrice = effectivePrice(product);
         return new CartItemResponse(
                 entity.getId(), product.getId(), product.getName(), product.getSlug(), product.getThumbnailUrl(),
                 product.getPrice(), product.getDiscountPrice(), effectivePrice, entity.getQuantity(),
-                effectivePrice.multiply(BigDecimal.valueOf(entity.getQuantity()))
+                lineTotal
         );
-    }
-
-    private BigDecimal effectivePrice(ProductEntity product) {
-        BigDecimal discount = product.getDiscountPrice();
-        return discount != null && discount.signum() >= 0 && discount.compareTo(product.getPrice()) < 0
-                ? discount : product.getPrice();
     }
 }

@@ -6,14 +6,18 @@ import com.electronics.store.security.CustomUserDetails;
 import com.electronics.store.security.JwtService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.http.MediaType;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.transaction.support.TransactionTemplate;
 
 import java.math.BigDecimal;
+import java.util.concurrent.*;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
@@ -31,6 +35,7 @@ class CartIntegrationTest {
     @Autowired BrandRepository brandRepository;
     @Autowired CartRepository cartRepository;
     @Autowired CartItemRepository cartItemRepository;
+    @Autowired TransactionTemplate transaction;
 
     private UserEntity userA;
     private UserEntity userB;
@@ -144,6 +149,89 @@ class CartIntegrationTest {
 
         assertThat(cartItemRepository.findById(itemId)).isPresent();
         assertThat(cartItemRepository.findById(itemId).orElseThrow().getQuantity()).isEqualTo(1);
+    }
+
+    @Test
+    void concurrentFirstAddsCreateOneCartAndPreserveBothQuantities() throws Exception {
+        CountDownLatch locked = new CountDownLatch(1);
+        CountDownLatch release = new CountDownLatch(1);
+        try (ExecutorService pool = Executors.newFixedThreadPool(3)) {
+            Future<?> holder = pool.submit(() -> transaction.executeWithoutResult(tx -> {
+                userRepository.findByEmailForUpdate(userA.getEmail()).orElseThrow();
+                locked.countDown();
+                try {
+                    if (!release.await(10, TimeUnit.SECONDS)) throw new IllegalStateException("Lock release timed out");
+                } catch (InterruptedException ex) {
+                    Thread.currentThread().interrupt();
+                    throw new IllegalStateException(ex);
+                }
+            }));
+            try {
+                assertThat(locked.await(5, TimeUnit.SECONDS)).isTrue();
+                Callable<Integer> request = () -> add(tokenA, productA.getId(), 1).andReturn().getResponse().getStatus();
+                Future<Integer> first = pool.submit(request);
+                Future<Integer> second = pool.submit(request);
+                org.junit.jupiter.api.Assertions.assertThrows(TimeoutException.class,
+                        () -> first.get(200, TimeUnit.MILLISECONDS));
+                org.junit.jupiter.api.Assertions.assertThrows(TimeoutException.class,
+                        () -> second.get(200, TimeUnit.MILLISECONDS));
+                release.countDown();
+                holder.get(10, TimeUnit.SECONDS);
+                assertThat(first.get(10, TimeUnit.SECONDS)).isEqualTo(201);
+                assertThat(second.get(10, TimeUnit.SECONDS)).isEqualTo(201);
+                assertThat(cartRepository.count()).isEqualTo(1);
+                long cartId = cartRepository.findByUserId(userA.getId()).orElseThrow().getId();
+                assertThat(cartItemRepository.findByCartIdOrderByIdAsc(cartId)).singleElement()
+                        .extracting(CartItemEntity::getQuantity).isEqualTo(2);
+                assertThat(productRepository.findById(productA.getId()).orElseThrow().getQuantity()).isEqualTo(10);
+            } finally {
+                release.countDown();
+            }
+        }
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"1.5", "1.0", "\"2\"", "true", "{}", "[]", "2147483648", "null", "0", "-1"})
+    void invalidQuantityCannotCreateOrChangeCartItems(String quantity) throws Exception {
+        add(tokenA, productA.getId(), 2).andExpect(status().isCreated());
+        Long cartId = cartRepository.findByUserId(userA.getId()).orElseThrow().getId();
+        Long itemId = cartItemRepository.findByCartIdAndProductId(cartId, productA.getId()).orElseThrow().getId();
+
+        mockMvc.perform(post("/api/cart/items").header("Authorization", bearer(tokenA))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"productId\":" + productB.getId() + ",\"quantity\":" + quantity + "}"))
+                .andExpect(status().isBadRequest());
+        mockMvc.perform(put("/api/cart/items/{id}", itemId).header("Authorization", bearer(tokenA))
+                        .contentType(MediaType.APPLICATION_JSON).content("{\"quantity\":" + quantity + "}"))
+                .andExpect(status().isBadRequest());
+
+        assertThat(cartItemRepository.findByCartIdOrderByIdAsc(cartId)).singleElement()
+                .extracting(CartItemEntity::getQuantity).isEqualTo(2);
+        mockMvc.perform(get("/api/cart").header("Authorization", bearer(tokenA)))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.data.subtotal").value(160.0));
+    }
+
+    @Test
+    void overflowingItemQuantityIsRejectedWithoutChangingCart() throws Exception {
+        productA.setQuantity(Integer.MAX_VALUE);
+        productRepository.save(productA);
+        add(tokenA, productA.getId(), Integer.MAX_VALUE).andExpect(status().isCreated());
+        add(tokenA, productA.getId(), 1).andExpect(status().isBadRequest());
+        mockMvc.perform(get("/api/cart").header("Authorization", bearer(tokenA)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.totalItems").value(Integer.MAX_VALUE));
+    }
+
+    @Test
+    void overflowingTotalQuantityRollsBackNewItem() throws Exception {
+        productA.setQuantity(Integer.MAX_VALUE);
+        productRepository.save(productA);
+        add(tokenA, productA.getId(), Integer.MAX_VALUE).andExpect(status().isCreated());
+        add(tokenA, productB.getId(), 1).andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message").value("Total cart quantity exceeds the supported limit"));
+        Long cartId = cartRepository.findByUserId(userA.getId()).orElseThrow().getId();
+        assertThat(cartItemRepository.findByCartIdOrderByIdAsc(cartId)).singleElement()
+                .extracting(CartItemEntity::getQuantity).isEqualTo(Integer.MAX_VALUE);
     }
 
     private org.springframework.test.web.servlet.ResultActions add(String token, Long productId, int quantity)

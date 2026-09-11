@@ -48,8 +48,10 @@ public class JwtService {
     }
 
     public boolean isTokenValid(String token, UserDetails userDetails) {
-        return extractSubject(token).equals(userDetails.getUsername())
-                && extractExpiration(token).after(new Date());
+        Claims claims = extractClaims(token);
+        Date expiration = claims.getExpiration();
+        return userDetails.getUsername().equals(claims.getSubject())
+                && expiration != null && expiration.after(new Date());
     }
 
     private Claims extractClaims(String token) {

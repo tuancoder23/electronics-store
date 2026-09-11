@@ -270,7 +270,7 @@ class ProductServiceTest {
                 1L
         );
 
-        when(productRepository.findById(1L)).thenReturn(Optional.of(sampleProduct));
+        when(productRepository.findByIdForUpdate(1L)).thenReturn(Optional.of(sampleProduct));
         when(categoryRepository.findById(1L)).thenReturn(Optional.of(sampleCategory));
         when(brandRepository.findById(1L)).thenReturn(Optional.of(sampleBrand));
         when(productRepository.existsByNameAndIdNot("ASUS TUF Gaming F15 2024", 1L)).thenReturn(false);
@@ -291,7 +291,7 @@ class ProductServiceTest {
                 "Product", "Desc", new BigDecimal("1000"), null, 1, null, ProductStatus.ACTIVE, 1L, 1L
         );
 
-        when(productRepository.findById(99L)).thenReturn(Optional.empty());
+        when(productRepository.findByIdForUpdate(99L)).thenReturn(Optional.empty());
 
         assertThrows(ResourceNotFoundException.class, () -> productService.updateProduct(99L, request));
     }
@@ -302,7 +302,7 @@ class ProductServiceTest {
                 "Product", "Desc", new BigDecimal("1000"), new BigDecimal("2000"), 1, null, ProductStatus.ACTIVE, 1L, 1L
         );
 
-        when(productRepository.findById(1L)).thenReturn(Optional.of(sampleProduct));
+        when(productRepository.findByIdForUpdate(1L)).thenReturn(Optional.of(sampleProduct));
 
         assertThrows(IllegalArgumentException.class, () -> productService.updateProduct(1L, request));
     }

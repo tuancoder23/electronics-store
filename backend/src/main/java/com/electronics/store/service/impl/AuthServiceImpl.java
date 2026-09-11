@@ -20,6 +20,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.Locale;
+import java.nio.charset.StandardCharsets;
 
 @Service
 @RequiredArgsConstructor
@@ -33,6 +34,10 @@ public class AuthServiceImpl implements AuthService {
     @Override
     @Transactional
     public AuthResponse register(RegisterRequest request) {
+        // Match password changes: BCrypt's limit is bytes, not Java characters.
+        if (request.password().getBytes(StandardCharsets.UTF_8).length > 72) {
+            throw new IllegalArgumentException("Password must not exceed 72 UTF-8 bytes");
+        }
         String email = normalizeEmail(request.email());
         if (userRepository.existsByEmail(email)) {
             throw new DuplicateResourceException("Email already exists: " + email);

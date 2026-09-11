@@ -1,6 +1,7 @@
 package com.electronics.store.dto.request;
 
 import com.electronics.store.entity.ProductStatus;
+import com.fasterxml.jackson.databind.annotation.JsonDeserialize;
 import jakarta.validation.constraints.DecimalMin;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
@@ -23,6 +24,7 @@ public record ProductRequest(
         @DecimalMin(value = "0.0", inclusive = true, message = "Discount price must be greater than or equal to 0")
         BigDecimal discountPrice,
 
+        @JsonDeserialize(using = QuantityDeserializer.class)
         @NotNull(message = "Quantity is required")
         @Min(value = 0, message = "Quantity must be greater than or equal to 0")
         Integer quantity,

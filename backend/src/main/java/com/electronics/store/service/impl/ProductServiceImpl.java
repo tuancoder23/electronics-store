@@ -20,6 +20,7 @@ import com.electronics.store.util.SlugUtils;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.annotation.Isolation;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
@@ -82,9 +83,10 @@ public class ProductServiceImpl implements ProductService {
     }
 
     @Override
-    @Transactional
+    @Transactional(isolation = Isolation.READ_COMMITTED)
     public ProductResponse updateProduct(Long id, ProductRequest request) {
-        ProductEntity entity = productRepository.findById(id)
+        // Share checkout/cancellation's product lock before reading any mutable product state.
+        ProductEntity entity = productRepository.findByIdForUpdate(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Product not found with id: " + id));
 
         validatePrices(request);
@@ -170,7 +172,7 @@ public class ProductServiceImpl implements ProductService {
         } catch (IllegalArgumentException exception) {
             throw new IllegalArgumentException("Sort direction must be asc or desc");
         }
-        return Sort.by(direction, parts[0]);
+        return Sort.by(direction, parts[0]).and(Sort.by(direction, "id"));
     }
 
     private String generateUniqueSlug(String name, Long currentId) {

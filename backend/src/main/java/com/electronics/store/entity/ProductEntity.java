@@ -13,6 +13,9 @@ import jakarta.persistence.ManyToOne;
 import jakarta.persistence.PrePersist;
 import jakarta.persistence.PreUpdate;
 import jakarta.persistence.Table;
+import jakarta.validation.constraints.Min;
+import jakarta.validation.constraints.NotNull;
+import org.hibernate.annotations.Check;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Getter;
@@ -27,6 +30,7 @@ import java.time.LocalDateTime;
  */
 @Entity
 @Table(name = "products")
+@Check(name = "ck_products_quantity_nonnegative", constraints = "quantity >= 0")
 @Getter
 @Setter
 @NoArgsConstructor
@@ -53,6 +57,8 @@ public class ProductEntity {
     @Column(name = "discount_price", precision = 15, scale = 2)
     private BigDecimal discountPrice;
 
+    @NotNull
+    @Min(0)
     @Column(nullable = false)
     private Integer quantity;
 

@@ -55,9 +55,15 @@ electronics-store/
 
 ### Backend
 
+Set `DB_URL`, `DB_USERNAME`, `DB_PASSWORD`, and `JWT_SECRET` in your shell or IDE environment
+using `.env.example` as a variable reference. `JWT_SECRET` must contain at least 32 bytes.
+Spring Boot does not automatically load a copied `.env` file. Keep local credentials out of Git.
+VNPay is disabled by default; see [VNPay sandbox setup](docs/vnpay-sandbox.md) to configure it.
+
 ```bash
 cd backend
-./mvnw spring-boot:run
+mvn clean test
+mvn spring-boot:run
 # API available at http://localhost:8080
 ```
 
@@ -86,8 +92,10 @@ npm run dev
 - [x] `GET /api/health` endpoint
 - [x] CORS configuration
 - [x] Global exception handler
-- [ ] Product catalogue API
-- [ ] Category API
-- [ ] Shopping cart
-- [ ] Authentication & Authorization
-- [ ] Database integration (PostgreSQL)
+- [x] Product catalogue, categories, brands, specifications and images
+- [x] Product search, filters, sorting and pagination
+- [x] Authentication, JWT authorization and user profile
+- [x] Shopping cart, checkout and order management
+- [x] Order cancellation, COD and VNPay sandbox payments
+- [x] Wishlist and product reviews/ratings
+- [x] Database integration (MySQL; H2 for automated tests)
