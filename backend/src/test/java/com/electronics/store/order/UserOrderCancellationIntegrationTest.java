@@ -235,6 +235,10 @@ class UserOrderCancellationIntegrationTest {
                 assertThat(stock(productB)).isEqualTo(corruptStock ? -1 : Integer.MAX_VALUE);
             }
             assertThat(orderItems.count()).isEqualTo(2);
+            PaymentEntity payment = payments.findByOrderId(id).orElseThrow();
+            assertThat(payment.getStatus()).isEqualTo(PaymentStatus.PENDING);
+            assertThat(payment.getPaidAt()).isNull();
+            assertThat(payments.count()).isEqualTo(1);
         } finally {
             if (corruptStock) {
                 jdbc.update("update products set quantity=0 where id=?", productB.getId());

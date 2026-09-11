@@ -324,6 +324,76 @@ class OrderIntegrationTest {
         add(token, productA, 1);
     }
 
+    @Test
+    void newlyRegisteredCustomerUsesLoginJwtToBuyAdminCreatedProductAndReviewAfterDelivery() throws Exception {
+        String password = "CoreFlow-Test-Password1";
+        JsonNode registered = data(call(HttpMethod.POST, "/api/auth/register", null, """
+                {"fullName":"New customer","email":"new-customer@example.test","password":"%s"}
+                """.formatted(password)), 201);
+        assertThat(registered.path("user").path("role").asText()).isEqualTo("USER");
+        String registrationToken = registered.path("accessToken").asText();
+        assertThat(registrationToken).isNotBlank();
+        assertThat(data(call(HttpMethod.GET, "/api/users/me", registrationToken, null), 200).path("id"))
+                .isEqualTo(registered.path("user").path("id"));
+        String customerToken = login("new-customer@example.test", password);
+
+        // Only the administrator is provisioned through a fixture; both actors authenticate via HTTP.
+        userA.setRole(Role.ADMIN);
+        userA.setPassword(passwordEncoder.encode(password));
+        users.saveAndFlush(userA);
+        String adminToken = login(userA.getEmail(), password);
+        String productBody = """
+                {"name":"Core flow phone","price":123.45,"discountPrice":100.10,"quantity":5,
+                 "categoryId":%d,"brandId":%d,"status":"ACTIVE"}
+                """.formatted(categories.findAll().getFirst().getId(), brands.findAll().getFirst().getId());
+        assertThat(call(HttpMethod.POST, "/api/admin/products", null, productBody).getStatusCode().value())
+                .isEqualTo(401);
+        assertThat(call(HttpMethod.POST, "/api/admin/products", customerToken, productBody).getStatusCode().value())
+                .isEqualTo(403);
+        JsonNode created = data(call(HttpMethod.POST, "/api/admin/products", adminToken, productBody), 201);
+        long productId = created.path("id").asLong();
+        assertThat(productId).isPositive();
+        data(call(HttpMethod.POST, "/api/cart/items", customerToken,
+                "{\"productId\":" + productId + ",\"quantity\":3}"), 201);
+        JsonNode order = data(checkout(customerToken), 201);
+        long orderId = order.path("id").asLong();
+        assertThat(order.path("status").asText()).isEqualTo("PENDING");
+        assertThat(order.path("totalAmount").decimalValue()).isEqualByComparingTo("300.30");
+        assertThat(order.path("payment").path("status").asText()).isEqualTo("PENDING");
+        assertThat(order.path("payment").path("amount").decimalValue()).isEqualByComparingTo("300.30");
+        assertThat(data(call(HttpMethod.GET, "/api/cart", customerToken, null), 200).path("items")).isEmpty();
+        assertThat(call(HttpMethod.GET, "/api/orders/" + orderId, tokenB, null).getStatusCode().value()).isEqualTo(404);
+        String reviewPath = "/api/products/" + productId + "/reviews";
+        String reviewBody = "{\"rating\":5,\"comment\":\"Works well\"}";
+        assertThat(call(HttpMethod.POST, reviewPath, customerToken, reviewBody).getStatusCode().value()).isEqualTo(403);
+
+        for (String next : List.of("CONFIRMED", "SHIPPING", "DELIVERED")) {
+            JsonNode updated = data(call(HttpMethod.PUT, "/api/admin/orders/" + orderId + "/status", adminToken,
+                    "{\"status\":\"" + next + "\"}"), 200);
+            assertThat(updated.path("status").asText()).isEqualTo(next);
+            assertThat(updated.path("payment").path("status").asText())
+                    .isEqualTo(next.equals("DELIVERED") ? "PAID" : "PENDING");
+        }
+        assertThat(payments.findByOrderId(orderId).orElseThrow().getPaidAt()).isNotNull();
+        assertThat(products.findById(productId).orElseThrow().getQuantity()).isEqualTo(2);
+        JsonNode review = data(call(HttpMethod.POST, reviewPath, customerToken, reviewBody), 201);
+        assertThat(review.path("user").path("id")).isEqualTo(registered.path("user").path("id"));
+        assertThat(review.path("rating").asInt()).isEqualTo(5);
+        assertThat(data(call(HttpMethod.GET, "/api/orders/" + orderId, customerToken, null), 200)
+                .path("status").asText()).isEqualTo("DELIVERED");
+    }
+
+    private String login(String email, String password) throws Exception {
+        ResponseEntity<String> response = call(HttpMethod.POST, "/api/auth/login", null,
+                json.writeValueAsString(java.util.Map.of("email", email, "password", password)));
+        assertThat(response.getBody()).doesNotContain(password);
+        JsonNode auth = data(response, 200);
+        assertThat(auth.path("tokenType").asText()).isEqualTo("Bearer");
+        String token = auth.path("accessToken").asText();
+        assertThat(token).isNotBlank();
+        return token;
+    }
+
     private List<Integer> concurrentCheckout(String firstToken, String secondToken) throws Exception {
         // Hold the product lock while both real HTTP requests start, then release it.
         CountDownLatch locked = new CountDownLatch(1);
@@ -378,6 +448,7 @@ class OrderIntegrationTest {
     private void assertUnchangedCart(int lines, int quantity) throws Exception {
         assertThat(orders.count()).isZero();
         assertThat(orderItems.count()).isZero();
+        assertThat(payments.count()).isZero();
         JsonNode cart = data(call(HttpMethod.GET, "/api/cart", tokenA, null), 200);
         assertThat(cart.path("items")).hasSize(lines);
         assertThat(cart.path("totalItems").asInt()).isEqualTo(quantity);
@@ -407,6 +478,8 @@ class OrderIntegrationTest {
         assertThat(response.getStatusCode().value()).as("HTTP response: %s", response.getBody()).isEqualTo(expectedStatus);
         JsonNode body = json.readTree(response.getBody());
         assertThat(body.path("success").asBoolean()).isTrue();
+        assertThat(body.findValues("password")).isEmpty();
+        assertThat(body.findValues("passwordHash")).isEmpty();
         return body.path("data");
     }
 

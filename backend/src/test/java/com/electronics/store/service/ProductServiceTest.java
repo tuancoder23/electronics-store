@@ -308,6 +308,23 @@ class ProductServiceTest {
     }
 
     @Test
+    void updateProduct_whenDuplicateName_shouldPreservePriceAndStockWithoutSaving() {
+        ProductRequest request = new ProductRequest("Existing name", "Changed", new BigDecimal("10"),
+                BigDecimal.ZERO, 0, null, ProductStatus.INACTIVE, 1L, 1L);
+        when(productRepository.findByIdForUpdate(1L)).thenReturn(Optional.of(sampleProduct));
+        when(categoryRepository.findById(1L)).thenReturn(Optional.of(sampleCategory));
+        when(brandRepository.findById(1L)).thenReturn(Optional.of(sampleBrand));
+        when(productRepository.existsByNameAndIdNot("Existing name", 1L)).thenReturn(true);
+
+        assertThrows(DuplicateResourceException.class, () -> productService.updateProduct(1L, request));
+        assertEquals("ASUS TUF Gaming F15", sampleProduct.getName());
+        assertEquals(new BigDecimal("25990000"), sampleProduct.getPrice());
+        assertEquals(10, sampleProduct.getQuantity());
+        assertEquals(ProductStatus.ACTIVE, sampleProduct.getStatus());
+        org.mockito.Mockito.verify(productRepository, org.mockito.Mockito.never()).save(any());
+    }
+
+    @Test
     void deleteProduct_whenFound_shouldDelete() {
         when(productRepository.existsById(1L)).thenReturn(true);
 
