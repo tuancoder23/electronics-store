@@ -12,6 +12,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -453,6 +454,53 @@ class PaymentIntegrationTest {
                 release.countDown();
             }
         }
+    }
+
+    @ParameterizedTest
+    @CsvSource({"amount,delivery", "method,delivery", "amount,user-cancel", "method,user-cancel",
+            "amount,admin-cancel", "method,admin-cancel"})
+    void inconsistentCodPaymentRollsBackOrderAndStockAndCanRetry(String mismatch, String action) throws Exception {
+        long id = twoProductOrder();
+        boolean delivery = action.equals("delivery");
+        if (delivery) {
+            data(adminUpdate(id, "CONFIRMED"), 200);
+            data(adminUpdate(id, "SHIPPING"), 200);
+        }
+        PaymentEntity before = payment(id);
+        BigDecimal correctAmount = before.getAmount();
+        // These snapshots are immutable through JPA; use SQL to simulate inconsistent legacy data.
+        BigDecimal storedAmount = mismatch.equals("amount") ? correctAmount.add(BigDecimal.ONE) : correctAmount;
+        PaymentMethod storedMethod = mismatch.equals("method") ? PaymentMethod.VNPAY : PaymentMethod.COD;
+        jdbc.update("update payments set amount=?, method=? where order_id=?", storedAmount, storedMethod.name(), id);
+        assertThat(payment(id).getAmount()).isEqualByComparingTo(storedAmount);
+        assertThat(payment(id).getMethod()).isEqualTo(storedMethod);
+        LocalDateTime orderUpdatedAt = orders.findById(id).orElseThrow().getUpdatedAt();
+        LocalDateTime paymentUpdatedAt = payment(id).getUpdatedAt();
+
+        ResponseEntity<String> response = delivery ? adminUpdate(id, "DELIVERED")
+                : action.equals("user-cancel") ? cancel(id) : adminUpdate(id, "CANCELLED");
+        error(response, 400);
+        assertThat(json.readTree(response.getBody()).path("message").asText()).contains("does not match order");
+        assertThat(status(id)).isEqualTo(delivery ? OrderStatus.SHIPPING : OrderStatus.PENDING);
+        assertThat(orders.findById(id).orElseThrow().getUpdatedAt()).isEqualTo(orderUpdatedAt);
+        assertThat(stock(productA)).isEqualTo(8);
+        assertThat(stock(productB)).isEqualTo(7);
+        assertThat(payment(id).getStatus()).isEqualTo(PaymentStatus.PENDING);
+        assertThat(payment(id).getAmount()).isEqualByComparingTo(storedAmount);
+        assertThat(payment(id).getMethod()).isEqualTo(storedMethod);
+        assertThat(payment(id).getPaidAt()).isNull();
+        assertThat(payment(id).getUpdatedAt()).isEqualTo(paymentUpdatedAt);
+        assertThat(payments.count()).isEqualTo(1);
+        assertThat(orderItems.count()).isEqualTo(2);
+        assertThat(cartItems.count()).isZero();
+
+        jdbc.update("update payments set amount=?, method='COD' where order_id=?", correctAmount, id);
+        data(delivery ? adminUpdate(id, "DELIVERED")
+                : action.equals("user-cancel") ? cancel(id) : adminUpdate(id, "CANCELLED"), 200);
+        assertThat(status(id)).isEqualTo(delivery ? OrderStatus.DELIVERED : OrderStatus.CANCELLED);
+        assertThat(payment(id).getStatus()).isEqualTo(delivery ? PaymentStatus.PAID : PaymentStatus.CANCELLED);
+        assertThat(stock(productA)).isEqualTo(delivery ? 8 : 10);
+        assertThat(stock(productB)).isEqualTo(delivery ? 7 : 10);
     }
 
     private void assertCheckoutRolledBack(int lines, int quantity) throws Exception {
