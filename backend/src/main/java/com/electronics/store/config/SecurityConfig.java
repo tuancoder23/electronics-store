@@ -72,6 +72,9 @@ public class SecurityConfig {
                         .requestMatchers("/api/admin/**").hasRole("ADMIN")
                         .requestMatchers("/api/cart/**", "/api/cart").authenticated()
                         .requestMatchers("/api/wishlist", "/api/wishlist/**").authenticated()
+                        .requestMatchers(org.springframework.http.HttpMethod.POST,
+                                "/api/products/*/reviews").authenticated()
+                        .requestMatchers("/api/reviews/**").authenticated()
                         .requestMatchers("/api/orders/**", "/api/orders").authenticated()
                         .requestMatchers("/api/users/me", "/api/users/me/**").authenticated()
                         .anyRequest().authenticated())
