@@ -18,4 +18,9 @@ public record RegisterRequest(
         String password,
         @Pattern(regexp = "^$|^[0-9+() .-]{7,30}$", message = "Phone number must be valid")
         String phone
-) {}
+) {
+    @Override
+    public String toString() {
+        return "RegisterRequest[credentials redacted]";
+    }
+}

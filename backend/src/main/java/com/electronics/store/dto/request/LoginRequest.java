@@ -9,4 +9,9 @@ public record LoginRequest(
         String email,
         @NotBlank(message = "Password is required")
         String password
-) {}
+) {
+    @Override
+    public String toString() {
+        return "LoginRequest[credentials redacted]";
+    }
+}

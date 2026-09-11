@@ -3,21 +3,28 @@ package com.electronics.store.service.impl;
 import com.electronics.store.dto.request.AddCartItemRequest;
 import com.electronics.store.dto.request.UpdateCartItemRequest;
 import com.electronics.store.dto.response.CartResponse;
+import com.electronics.store.dto.response.CartItemResponse;
 import com.electronics.store.entity.*;
 import com.electronics.store.exception.ForbiddenOperationException;
 import com.electronics.store.exception.ResourceNotFoundException;
 import com.electronics.store.mapper.CartMapper;
+import com.electronics.store.mapper.CartItemMapper;
 import com.electronics.store.repository.CartItemRepository;
 import com.electronics.store.repository.CartRepository;
 import com.electronics.store.repository.ProductRepository;
 import com.electronics.store.repository.UserRepository;
 import com.electronics.store.service.CartService;
+import com.electronics.store.util.ProductPricing;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.annotation.Isolation;
+
+import java.math.BigDecimal;
+import java.util.ArrayList;
+import java.util.List;
 
 @Service
 @RequiredArgsConstructor
@@ -28,6 +35,7 @@ public class CartServiceImpl implements CartService {
     private final ProductRepository productRepository;
     private final UserRepository userRepository;
     private final CartMapper cartMapper;
+    private final CartItemMapper cartItemMapper;
 
     @Override
     @Transactional(isolation = Isolation.READ_COMMITTED)
@@ -45,9 +53,9 @@ public class CartServiceImpl implements CartService {
 
         CartItemEntity item = cartItemRepository.findByCartIdAndProductId(cart.getId(), product.getId())
                 .orElseGet(() -> CartItemEntity.builder().cart(cart).product(product).quantity(0).build());
-        int newQuantity = item.getQuantity() + request.quantity();
+        long newQuantity = (long) item.getQuantity() + request.quantity();
         validateStock(product, newQuantity);
-        item.setQuantity(newQuantity);
+        item.setQuantity((int) newQuantity);
         cartItemRepository.save(item);
         touch(cart);
         return response(cart);
@@ -92,7 +100,8 @@ public class CartServiceImpl implements CartService {
         if (authentication == null || !authentication.isAuthenticated() || "anonymousUser".equals(authentication.getPrincipal())) {
             throw new ForbiddenOperationException("Authentication is required");
         }
-        return userRepository.findByEmail(authentication.getName())
+        // Lock an existing row even before the user's first cart exists, then lock the cart.
+        return userRepository.findByEmailForUpdate(authentication.getName())
                 .orElseThrow(() -> new ResourceNotFoundException("Authenticated user not found"));
     }
 
@@ -119,7 +128,7 @@ public class CartServiceImpl implements CartService {
         }
     }
 
-    private void validateStock(ProductEntity product, int quantity) {
+    private void validateStock(ProductEntity product, long quantity) {
         if (quantity < 1) {
             throw new IllegalArgumentException("Quantity must be at least 1");
         }
@@ -135,6 +144,19 @@ public class CartServiceImpl implements CartService {
     }
 
     private CartResponse response(CartEntity cart) {
-        return cartMapper.toResponse(cart, cartItemRepository.findByCartIdOrderByIdAsc(cart.getId()));
+        List<CartItemResponse> items = new ArrayList<>();
+        BigDecimal subtotal = BigDecimal.ZERO;
+        long totalItems = 0;
+        for (CartItemEntity item : cartItemRepository.findForDisplayByCartId(cart.getId())) {
+            BigDecimal price = ProductPricing.effectivePrice(item.getProduct());
+            BigDecimal lineTotal = price.multiply(BigDecimal.valueOf(item.getQuantity()));
+            items.add(cartItemMapper.toResponse(item, price, lineTotal));
+            subtotal = subtotal.add(lineTotal);
+            totalItems += item.getQuantity();
+        }
+        if (totalItems > Integer.MAX_VALUE) {
+            throw new IllegalArgumentException("Total cart quantity exceeds the supported limit");
+        }
+        return cartMapper.toResponse(cart, items, (int) totalItems, subtotal);
     }
 }

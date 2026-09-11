@@ -13,6 +13,7 @@ import com.electronics.store.mapper.OrderMapper;
 import com.electronics.store.repository.*;
 import com.electronics.store.service.OrderService;
 import com.electronics.store.service.PaymentService;
+import com.electronics.store.util.ProductPricing;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
@@ -69,7 +70,7 @@ public class OrderServiceImpl implements OrderService {
             ProductEntity product = productRepository.findByIdForUpdate(productId)
                     .orElseThrow(() -> new ResourceNotFoundException("Product not found with id: " + productId));
             validateStock(product, cartItem.getQuantity());
-            BigDecimal unitPrice = effectivePrice(product);
+            BigDecimal unitPrice = ProductPricing.effectivePrice(product);
             BigDecimal lineTotal = unitPrice.multiply(BigDecimal.valueOf(cartItem.getQuantity()));
             order.addItem(OrderItemEntity.builder().productId(productId).productName(product.getName())
                     .unitPrice(unitPrice).quantity(cartItem.getQuantity()).lineTotal(lineTotal).build());
@@ -229,12 +230,4 @@ public class OrderServiceImpl implements OrderService {
         }
     }
 
-    private BigDecimal effectivePrice(ProductEntity product) {
-        BigDecimal price = product.getPrice();
-        if (price == null || price.signum() < 0) {
-            throw new IllegalArgumentException("Product price is invalid: " + product.getName());
-        }
-        BigDecimal discount = product.getDiscountPrice();
-        return discount != null && discount.signum() >= 0 && discount.compareTo(price) < 0 ? discount : price;
-    }
 }

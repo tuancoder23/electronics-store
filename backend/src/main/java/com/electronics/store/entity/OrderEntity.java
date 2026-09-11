@@ -3,6 +3,7 @@ package com.electronics.store.entity;
 import jakarta.persistence.*;
 import jakarta.validation.constraints.*;
 import lombok.*;
+import org.hibernate.annotations.BatchSize;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
@@ -77,6 +78,8 @@ public class OrderEntity {
     private PaymentEntity payment;
 
     @OneToMany(mappedBy = "order", cascade = CascadeType.ALL, orphanRemoval = true)
+    // Batch the page's collections without collection fetch joins that break database pagination.
+    @BatchSize(size = 100)
     @OrderBy("id ASC")
     @Builder.Default
     private List<OrderItemEntity> items = new ArrayList<>();

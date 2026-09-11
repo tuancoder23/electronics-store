@@ -13,6 +13,8 @@ import com.electronics.store.exception.ResourceNotFoundException;
 import com.electronics.store.service.ProductService;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
 import org.springframework.context.annotation.Import;
@@ -49,6 +51,19 @@ class ProductControllerTest {
 
     @MockitoBean
     private ProductService productService;
+
+    @ParameterizedTest
+    @ValueSource(strings = {"1.5", "1.0", "\"2\"", "true", "{}", "[]", "2147483648", "null", "-1"})
+    void invalidStockQuantityIsRejectedBeforeCallingService(String quantity) throws Exception {
+        String body = """
+                {"name":"Test product","price":100,"quantity":%s,"categoryId":1,"brandId":1}
+                """.formatted(quantity);
+        mockMvc.perform(post("/api/admin/products").contentType(MediaType.APPLICATION_JSON).content(body))
+                .andExpect(status().isBadRequest());
+        mockMvc.perform(put("/api/admin/products/1").contentType(MediaType.APPLICATION_JSON).content(body))
+                .andExpect(status().isBadRequest());
+        org.mockito.Mockito.verifyNoInteractions(productService);
+    }
 
     private ProductResponse buildSampleResponse() {
         return new ProductResponse(

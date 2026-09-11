@@ -194,26 +194,56 @@ class UserOrderCancellationIntegrationTest {
         add(tokenA, productA, 10);
         add(tokenA, productB, 3);
         long id = data(checkout(tokenA), 201).path("id").asLong();
-        if (failure.equals("missing")) {
-            products.deleteById(productB.getId());
-        } else {
-            ProductEntity product = products.findById(productB.getId()).orElseThrow();
-            product.setQuantity(failure.equals("negative") ? -1 : Integer.MAX_VALUE);
-            products.saveAndFlush(product);
+        boolean corruptStock = failure.equals("negative");
+        List<Map<String, Object>> stockConstraints = List.of();
+        if (corruptStock) {
+            // Deliberately simulate legacy corrupt data; normal JPA and SQL writes now reject it.
+            // Hibernate can emit both the explicit CHECK and one derived from @Min.
+            stockConstraints = jdbc.queryForList("""
+                    select tc.constraint_name, cc.check_clause
+                    from information_schema.table_constraints tc
+                    join information_schema.check_constraints cc
+                      on tc.constraint_schema = cc.constraint_schema and tc.constraint_name = cc.constraint_name
+                    where tc.table_name = 'PRODUCTS' and tc.constraint_type = 'CHECK'
+                      and lower(cc.check_clause) like '%quantity%'
+                    """);
+            assertThat(stockConstraints).isNotEmpty();
+            for (Map<String, Object> constraint : stockConstraints) {
+                jdbc.execute("alter table products drop constraint \"" + constraint.get("CONSTRAINT_NAME") + "\"");
+            }
         }
-        LocalDateTime before = orders.findById(id).orElseThrow().getUpdatedAt();
-        error(cancel(id, tokenA), 400);
-        assertThat(status(id)).isEqualTo(OrderStatus.PENDING);
-        assertThat(orders.findById(id).orElseThrow().getUpdatedAt()).isEqualTo(before);
-        ProductEntity first = products.findById(productA.getId()).orElseThrow();
-        assertThat(first.getQuantity()).isZero();
-        assertThat(first.getStatus()).isEqualTo(ProductStatus.OUT_OF_STOCK);
-        if (failure.equals("missing")) {
-            assertThat(products.findById(productB.getId())).isEmpty();
-        } else {
-            assertThat(stock(productB)).isEqualTo(failure.equals("negative") ? -1 : Integer.MAX_VALUE);
+        try {
+            if (failure.equals("missing")) {
+                products.deleteById(productB.getId());
+            } else if (corruptStock) {
+                jdbc.update("update products set quantity=-1 where id=?", productB.getId());
+            } else {
+                ProductEntity product = products.findById(productB.getId()).orElseThrow();
+                product.setQuantity(Integer.MAX_VALUE);
+                products.saveAndFlush(product);
+            }
+            LocalDateTime before = orders.findById(id).orElseThrow().getUpdatedAt();
+            error(cancel(id, tokenA), 400);
+            assertThat(status(id)).isEqualTo(OrderStatus.PENDING);
+            assertThat(orders.findById(id).orElseThrow().getUpdatedAt()).isEqualTo(before);
+            ProductEntity first = products.findById(productA.getId()).orElseThrow();
+            assertThat(first.getQuantity()).isZero();
+            assertThat(first.getStatus()).isEqualTo(ProductStatus.OUT_OF_STOCK);
+            if (failure.equals("missing")) {
+                assertThat(products.findById(productB.getId())).isEmpty();
+            } else {
+                assertThat(stock(productB)).isEqualTo(corruptStock ? -1 : Integer.MAX_VALUE);
+            }
+            assertThat(orderItems.count()).isEqualTo(2);
+        } finally {
+            if (corruptStock) {
+                jdbc.update("update products set quantity=0 where id=?", productB.getId());
+                for (Map<String, Object> constraint : stockConstraints) {
+                    jdbc.execute("alter table products add constraint \"" + constraint.get("CONSTRAINT_NAME")
+                            + "\" check (" + constraint.get("CHECK_CLAUSE") + ")");
+                }
+            }
         }
-        assertThat(orderItems.count()).isEqualTo(2);
     }
 
     @Test

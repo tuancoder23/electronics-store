@@ -39,19 +39,26 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         try {
             String token = header.substring(7);
             String email = jwtService.extractSubject(token);
-            if (email != null && SecurityContextHolder.getContext().getAuthentication() == null) {
-                UserDetails userDetails = userDetailsService.loadUserByUsername(email);
-                if (jwtService.isTokenValid(token, userDetails) && userDetails.isEnabled()) {
-                    UsernamePasswordAuthenticationToken authentication =
-                            new UsernamePasswordAuthenticationToken(userDetails, null, userDetails.getAuthorities());
-                    authentication.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
-                    SecurityContextHolder.getContext().setAuthentication(authentication);
-                }
+            if (email == null || email.isBlank()) {
+                throw new BadCredentialsException("Invalid JWT subject");
             }
-            filterChain.doFilter(request, response);
-        } catch (JwtException | BadCredentialsException | org.springframework.security.core.userdetails.UsernameNotFoundException exception) {
+            if (SecurityContextHolder.getContext().getAuthentication() == null) {
+                UserDetails userDetails = userDetailsService.loadUserByUsername(email);
+                if (!jwtService.isTokenValid(token, userDetails) || !userDetails.isEnabled()) {
+                    throw new BadCredentialsException("Invalid JWT");
+                }
+                UsernamePasswordAuthenticationToken authentication =
+                        new UsernamePasswordAuthenticationToken(userDetails, null, userDetails.getAuthorities());
+                authentication.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
+                SecurityContextHolder.getContext().setAuthentication(authentication);
+            }
+        } catch (JwtException | IllegalArgumentException | BadCredentialsException
+                 | org.springframework.security.core.userdetails.UsernameNotFoundException exception) {
             SecurityContextHolder.clearContext();
             authenticationEntryPoint.commence(request, response, new BadCredentialsException("Invalid JWT", exception));
+            return;
         }
+        // Only authentication failures belong to this filter; downstream errors keep their own handling.
+        filterChain.doFilter(request, response);
     }
 }
