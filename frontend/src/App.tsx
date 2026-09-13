@@ -1,71 +1,37 @@
-import { useEffect, useState } from 'react'
-import { isAxiosError } from 'axios'
-import { getHealth } from './api/healthApi'
-import type { HealthResponse } from './types/health'
+import { Link, Navigate, Route, Routes } from 'react-router-dom'
+import { ProtectedRoute } from './components/ProtectedRoute'
+import { GuestRoute } from './components/GuestRoute'
+import { LoginPage } from './pages/LoginPage'
+import { RegisterPage } from './pages/RegisterPage'
+import { AccountPage } from './pages/AccountPage'
+import HealthPage from './pages/HealthPage'
 import './App.css'
 
-type HealthState =
-  | { status: 'loading' }
-  | { status: 'online'; data: HealthResponse }
-  | { status: 'error'; message: string }
-
 function App() {
-  const [health, setHealth] = useState<HealthState>({ status: 'loading' })
-
-  useEffect(() => {
-    const controller = new AbortController()
-
-    async function checkHealth() {
-      try {
-        const data = await getHealth(controller.signal)
-        if (!controller.signal.aborted) {
-          setHealth({ status: 'online', data })
-        }
-      } catch (error: unknown) {
-        if (controller.signal.aborted) return
-
-        let message = 'Không thể kiểm tra kết nối backend.'
-        if (isAxiosError(error)) {
-          if (error.code === 'ECONNABORTED' || error.code === 'ETIMEDOUT') {
-            message = 'Backend không phản hồi trong thời gian chờ 10 giây.'
-          } else if (error.response) {
-            message = `Health API trả về lỗi HTTP ${error.response.status}.`
-          } else {
-            message = 'Không thể kết nối backend. Hãy kiểm tra server, mạng và cấu hình CORS.'
-          }
-        } else if (error instanceof Error) {
-          message = error.message
-        }
-
-        setHealth({ status: 'error', message })
-      }
-    }
-
-    void checkHealth()
-    return () => controller.abort()
-  }, [])
-
   return (
-    <main className="health-check">
-      <h1>Electronics Store</h1>
-      <p>Kiểm tra kết nối backend</p>
-      <div className="health-result" role="status" aria-live="polite">
-        {health.status === 'loading' && <p>Đang kiểm tra kết nối backend…</p>}
-        {health.status === 'online' && (
-          <>
-            <h2>Backend online</h2>
-            <p>{health.data.message}</p>
-            <p>Trạng thái: {health.data.status} · Phiên bản: {health.data.version}</p>
-          </>
-        )}
-        {health.status === 'error' && (
-          <>
-            <h2>Lỗi kết nối backend</h2>
-            <p>{health.message}</p>
-          </>
-        )}
-      </div>
-    </main>
+    <>
+      <header className="app-header">
+        <Link className="brand" to="/account">Electronics Store</Link>
+        <nav aria-label="Điều hướng chính">
+          <Link to="/account">Tài khoản</Link>
+          <Link to="/health">Kết nối backend</Link>
+        </nav>
+      </header>
+      <main className="app-content">
+        <Routes>
+          <Route path="/" element={<Navigate to="/account" replace />} />
+          <Route path="/health" element={<HealthPage />} />
+          <Route element={<GuestRoute />}>
+            <Route path="/login" element={<LoginPage />} />
+            <Route path="/register" element={<RegisterPage />} />
+          </Route>
+          <Route element={<ProtectedRoute />}>
+            <Route path="/account" element={<AccountPage />} />
+          </Route>
+          <Route path="*" element={<section className="auth-card"><h1>Không tìm thấy trang</h1><Link to="/">Về trang chủ</Link></section>} />
+        </Routes>
+      </main>
+    </>
   )
 }
 
