@@ -1,5 +1,7 @@
 package com.electronics.store.dto.request;
 
+import io.swagger.v3.oas.annotations.media.Schema;
+
 import com.electronics.store.entity.OrderStatus;
 import com.fasterxml.jackson.annotation.JsonAnySetter;
 import com.fasterxml.jackson.core.JsonParser;
@@ -11,6 +13,7 @@ import jakarta.validation.constraints.NotNull;
 
 import java.io.IOException;
 
+@Schema(description = "Only required status accepted as exact enum string; numeric ordinal/unknown fields rejected. Lifecycle transitions additionally validated by service.")
 public record UpdateOrderStatusRequest(
         @NotNull(message = "Order status is required")
         @JsonDeserialize(using = StatusDeserializer.class) OrderStatus status
