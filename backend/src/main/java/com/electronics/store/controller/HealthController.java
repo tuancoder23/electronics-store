@@ -1,5 +1,7 @@
 package com.electronics.store.controller;
 
+import io.swagger.v3.oas.annotations.Operation;
+
 import com.electronics.store.dto.response.ApiResponse;
 import com.electronics.store.dto.response.HealthResponse;
 import org.springframework.http.ResponseEntity;
@@ -19,6 +21,14 @@ public class HealthController {
 
     private static final String VERSION = "0.0.1-SNAPSHOT";
 
+    @Operation(summary = "Check API health",
+            description = "PUBLIC: no JWT or role required. Returns UP and application version. No body or parameters. Liveness only, not dependency readiness.",
+            tags = {"Health"},
+            responses = {
+                    @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Success", useReturnTypeSchema = true),
+                    @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", ref = "#/components/responses/Unauthorized"),
+                    @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "500", ref = "#/components/responses/InternalError")
+            })
     @GetMapping("/health")
     public ResponseEntity<ApiResponse<HealthResponse>> health() {
         HealthResponse payload = new HealthResponse(

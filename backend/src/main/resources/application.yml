@@ -1,6 +1,17 @@
 server:
   port: 8080
 
+springdoc:
+  packages-to-scan: com.electronics.store.controller
+  paths-to-match: /api/**
+  override-with-generic-response: false
+  swagger-ui:
+    path: /swagger-ui.html
+    disable-swagger-default-url: true
+    persist-authorization: false
+    tags-sorter: alpha
+    operations-sorter: alpha
+
 spring:
   application:
     name: electronics-store-backend

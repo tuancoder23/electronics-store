@@ -63,6 +63,9 @@ public class SecurityConfig {
                         .authenticationEntryPoint(authenticationEntryPoint)
                         .accessDeniedHandler(accessDeniedHandler))
                 .authorizeHttpRequests(auth -> auth
+                        .requestMatchers(org.springframework.http.HttpMethod.GET,
+                                "/swagger-ui.html", "/swagger-ui/**", "/v3/api-docs", "/v3/api-docs/**",
+                                "/v3/api-docs.yaml").permitAll()
                         .requestMatchers("/api/health", "/api/auth/register", "/api/auth/login").permitAll()
                         .requestMatchers(org.springframework.http.HttpMethod.GET,
                                 "/api/payments/vnpay/return", "/api/payments/vnpay/ipn").permitAll()

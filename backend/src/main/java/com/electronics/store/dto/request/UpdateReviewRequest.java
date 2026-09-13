@@ -1,9 +1,12 @@
 package com.electronics.store.dto.request;
 
+import io.swagger.v3.oas.annotations.media.Schema;
+
 import com.fasterxml.jackson.annotation.JsonAnySetter;
 import com.fasterxml.jackson.databind.annotation.JsonDeserialize;
 import jakarta.validation.constraints.*;
 
+@Schema(description = "Only rating and comment accepted. Rating required JSON integer 1..5; comment stripped, nonblank, 1..1000 characters. Ownership required.")
 public record UpdateReviewRequest(
         @JsonDeserialize(using = ReviewRatingDeserializer.class)
         @NotNull(message = "Rating is required")
